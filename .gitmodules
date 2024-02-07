@@ -1,0 +1,6 @@
+[submodule "lib/akari_yolo_lib"]
+	path = lib/akari_yolo_lib
+	url = https://github.com/AkariGroup/akari_yolo_lib.git
+[submodule "akari_chatgpt_bot"]
+	path = akari_chatgpt_bot
+	url = https://github.com/AkariGroup/akari_chatgpt_bot.git
