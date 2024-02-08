@@ -1,0 +1,10 @@
+google-cloud-speech
+-e gpt-stream-json-parser/
+grpcio
+grpcio-tools
+openai
+numpy
+PyAudio
+python-dotenv
+six
+SpeechRecognition
