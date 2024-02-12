@@ -1,5 +1,5 @@
 google-cloud-speech
--e gpt-stream-json-parser/
+-e akari_chatgpt_bot/gpt-stream-json-parser/
 grpcio
 grpcio-tools
 openai
