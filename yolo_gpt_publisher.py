@@ -23,7 +23,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     chatGPTにtextを送信し、返答をvoicevox_serverに送るgprcサーバ
     """
 
-    def __init__(self):
+    def __init__(self,yolo_tacking: YoloTracking):
         self.messages = [
             {
                 "role": "system",
@@ -33,6 +33,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         voicevox_channel = grpc.insecure_channel("localhost:10002")
         self.stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
         self.chat_stream_akari_grpc = ChatStreamAkariGrpc()
+        self.yolo_tracking = yolo_tracking
 
     def SetGpt(
         self, request: gpt_server_pb2.SetGptRequest(), context: grpc.ServicerContext
@@ -42,6 +43,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
             return gpt_server_pb2.SetGptReply(success=True)
         print(f"Receive: {request.text}")
         if request.is_finish:
+            request.text += self.yolo_tracking.get_result_text()
             content = f"{request.text}。一文で簡潔に答えてください。"
         else:
             content = f"「{request.text}」という文に対して、以下の「」内からどれか一つを選択して、それだけ回答してください。\n「えーと。」「はい。」「うーん。」「いいえ。」「はい、そうですね。」「そうですね…。」「いいえ、違います。」「こんにちは。」「ありがとうございます。」「なるほど。」「まあ。」"
@@ -111,13 +113,13 @@ class YoloTracking(object):
                 text += "右"
             else:
                 text += "左"
-            text += f"{abs(tracklet.spatialCoordinates.x)}m "
+            text += "{:.2f} m".format(abs(tracklet.spatialCoordinates.x) / 1000)
             if tracklet.spatialCoordinates.y >= 0:
                 text += "上"
             else:
                 text += "下"
-            text += f"{abs(tracklet.spatialCoordinates.y)}m "
-            text += f"奥行き {abs(tracklet.spatialCoordinates.z)}m "
+            text += "{:.2f} m".format(abs(tracklet.spatialCoordinates.y) / 1000)
+            text += "奥行き {:.2f} m".format(abs(tracklet.spatialCoordinates.z) / 1000)
             text += "\n"
         text += "]"
 
@@ -152,8 +154,11 @@ def main() -> None:
         "--port", help="Gpt server port number", default="10001", type=str
     )
     args = parser.parse_args()
+    yolo_tacking = YoloTracking(
+            config_path=args.config_path, model_path=args.model_path, fps=args.fps, fov=args.fov
+        )
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    gpt_server_pb2_grpc.add_GptServerServiceServicer_to_server(GptServer(), server)
+    gpt_server_pb2_grpc.add_GptServerServiceServicer_to_server(GptServer(yolo_tacking), server)
     server.add_insecure_port(args.ip + ":" + args.port)
     server.start()
 
