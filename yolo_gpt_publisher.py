@@ -4,12 +4,14 @@ import os
 import sys
 import openai
 import grpc
+import threading
 from concurrent import futures
-from lib.chat import chat_stream
-from lib.chat_akari_grpc import ChatStreamAkariGrpc
-from lib.conf import OPENAI_APIKEY
+from akari_chatgpt_bot.lib.chat import chat_stream
+from akari_chatgpt_bot.lib.chat_akari_grpc import ChatStreamAkariGrpc
+from akari_chatgpt_bot.lib.conf import OPENAI_APIKEY
 import copy
 import cv2
+from lib.akari_yolo_lib.oakd_tracking_yolo import OakdTrackingYolo
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib/grpc"))
 import gpt_server_pb2
@@ -17,13 +19,72 @@ import gpt_server_pb2_grpc
 import voicevox_server_pb2
 import voicevox_server_pb2_grpc
 
+# OAK-D LITEの視野角
+fov = 56.7
+
+class YoloTracking(object):
+    def __init__(
+        self,
+        config_path: str,
+        model_path: str,
+        fps: int,
+        fov: float,
+    ) -> None:
+        self.oakd_tracking_yolo = OakdTrackingYolo(
+            config_path=config_path, model_path=model_path, fps=fps, fov=fov
+        )
+        self.tracklets = []
+        self.labels = self.oakd_tracking_yolo.get_labels()
+
+    '''
+    def update(self) -> None:
+        while True:
+            frame = None
+            detections = []
+            try:
+                frame, detections, self.tracklets = self.oakd_tracking_yolo.get_frame()
+            except BaseException:
+                print("===================")
+                print("get_frame() error! Reboot OAK-D.")
+                print("If reboot occur frequently, Bandwidth may be too much.")
+                print("Please lower FPS.")
+                print("==================")
+                break
+            if frame is not None:
+                self.oakd_tracking_yolo.display_frame("nn", frame, tracklets)
+            if cv2.waitKey(1) == ord("q"):
+                break
+    '''
+    def get_result_text(self) -> str:
+        text = " 認識結果 ["
+        if self.tracklets is not None:
+            for tracklet in self.tracklets:
+                if tracklet.status.name != "NEW" and tracklet.status.name != "TRACKED":
+                    continue
+                text += f"種類: {self.labels[tracklet.label]},"
+                text += "位置:"
+                if tracklet.spatialCoordinates.x >= 0:
+                    text += "右"
+                else:
+                    text += "左"
+                text += "{:.2f} m".format(abs(tracklet.spatialCoordinates.x) / 1000)
+                if tracklet.spatialCoordinates.y >= 0:
+                    text += "上"
+                else:
+                    text += "下"
+                text += "{:.2f} m".format(abs(tracklet.spatialCoordinates.y) / 1000)
+                text += "奥行き {:.2f} m".format(abs(tracklet.spatialCoordinates.z) / 1000)
+                text += "\n"
+        text += "]"
+        return text
+
 
 class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     """
     chatGPTにtextを送信し、返答をvoicevox_serverに送るgprcサーバ
     """
 
-    def __init__(self,yolo_tacking: YoloTracking):
+    def __init__(self, yolo_tracking: YoloTracking):
         self.messages = [
             {
                 "role": "system",
@@ -76,54 +137,6 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         return gpt_server_pb2.SendMotionReply(success=success)
 
 
-class YoloTracking(object):
-    def __init__(self, config_path, model_path, fps, fov) -> None:
-        self.oakd_tracking_yolo = OakdTrackingYolo(
-            config_path=config_path, model_path=model_path, fps=fps, fov=fov
-        )
-        self.tracklets = []
-        self.labels = self.oakd_tracking_yolo.get_labels()
-
-    def update(self) -> None:
-        while True:
-            frame = None
-            detections = []
-            try:
-                frame, detections, self.tracklets = self.oakd_tracking_yolo.get_frame()
-            except BaseException:
-                print("===================")
-                print("get_frame() error! Reboot OAK-D.")
-                print("If reboot occur frequently, Bandwidth may be too much.")
-                print("Please lower FPS.")
-                print("==================")
-                break
-            if frame is not None:
-                self.oakd_tracking_yolo.display_frame("nn", frame, tracklets)
-            if cv2.waitKey(1) == ord("q"):
-                break
-
-    def get_result_text(self) -> str:
-        text = " 認識結果 ["
-        for tracklet in self.tracklets:
-            if tracklet.status.name != "NEW" and tracklet.status.name != "TRACKED":
-                continue
-            text += f"種類: {self.labels[tracklet.label]},"
-            text += "位置:"
-            if tracklet.spatialCoordinates.x >= 0:
-                text += "右"
-            else:
-                text += "左"
-            text += "{:.2f} m".format(abs(tracklet.spatialCoordinates.x) / 1000)
-            if tracklet.spatialCoordinates.y >= 0:
-                text += "上"
-            else:
-                text += "下"
-            text += "{:.2f} m".format(abs(tracklet.spatialCoordinates.y) / 1000)
-            text += "奥行き {:.2f} m".format(abs(tracklet.spatialCoordinates.z) / 1000)
-            text += "\n"
-        text += "]"
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -154,22 +167,30 @@ def main() -> None:
         "--port", help="Gpt server port number", default="10001", type=str
     )
     args = parser.parse_args()
-    yolo_tacking = YoloTracking(
-            config_path=args.config_path, model_path=args.model_path, fps=args.fps, fov=args.fov
-        )
+    yolo_tracking = YoloTracking(
+        config_path=args.config,
+        model_path=args.model,
+        fps=args.fps,
+        fov=fov,
+    )
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    gpt_server_pb2_grpc.add_GptServerServiceServicer_to_server(GptServer(yolo_tacking), server)
+    gpt_server_pb2_grpc.add_GptServerServiceServicer_to_server(
+        GptServer(yolo_tracking), server
+    )
     server.add_insecure_port(args.ip + ":" + args.port)
     server.start()
-
-    t1 = threading.Thread(target=FaceRecognition, args=(q_detection,))
     print(f"gpt_publisher start. port: {args.port}")
-    try:
-        while True:
-            pass
-    except KeyboardInterrupt:
-        exit()
-
+    while True:
+        frame = None
+        detections = []
+        #try:
+        frame, detections, yolo_tracking.tracklets = yolo_tracking.oakd_tracking_yolo.get_frame()
+        #except BaseException:
+        if frame is not None:
+            yolo_tracking.oakd_tracking_yolo.display_frame("nn", frame, yolo_tracking.tracklets)
+        if cv2.waitKey(1) == ord("q"):
+            end = True
+            break
 
 if __name__ == "__main__":
     main()
