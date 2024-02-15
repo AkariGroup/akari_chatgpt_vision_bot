@@ -6,6 +6,7 @@ import openai
 import grpc
 import threading
 from concurrent import futures
+from typing import Any
 from akari_chatgpt_bot.lib.chat import chat_stream
 from akari_chatgpt_bot.lib.chat_akari_grpc import ChatStreamAkariGrpc
 from akari_chatgpt_bot.lib.conf import OPENAI_APIKEY
@@ -55,14 +56,17 @@ class YoloTracking(object):
             if cv2.waitKey(1) == ord("q"):
                 break
     '''
+    def set_tracklet(self, tracklets: Any) -> None:
+        self.tracklets = tracklets
+
     def get_result_text(self) -> str:
-        text = " 認識結果 ["
+        text = " 認識結果 {\n"
         if self.tracklets is not None:
             for tracklet in self.tracklets:
                 if tracklet.status.name != "NEW" and tracklet.status.name != "TRACKED":
                     continue
                 text += f"種類: {self.labels[tracklet.label]},"
-                text += "位置:"
+                text += "あなたから見た位置:"
                 if tracklet.spatialCoordinates.x >= 0:
                     text += "右"
                 else:
@@ -73,9 +77,9 @@ class YoloTracking(object):
                 else:
                     text += "下"
                 text += "{:.2f} m".format(abs(tracklet.spatialCoordinates.y) / 1000)
-                text += "奥行き {:.2f} m".format(abs(tracklet.spatialCoordinates.z) / 1000)
+                text += "近さ {:.2f} m".format(abs(tracklet.spatialCoordinates.z) / 1000)
                 text += "\n"
-        text += "]"
+        text += "}"
         return text
 
 
@@ -88,7 +92,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         self.messages = [
             {
                 "role": "system",
-                "content": "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。正確はポジティブで元気です。",
+                "content": "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。認識結果としてあなたから見た左右、上下、奥行きが渡されるので、それに基づいて回答してください。距離はセンチメートルで答えてください",
             },
         ]
         voicevox_channel = grpc.insecure_channel("localhost:10002")
@@ -105,6 +109,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         print(f"Receive: {request.text}")
         if request.is_finish:
             request.text += self.yolo_tracking.get_result_text()
+            print(f"result: {request.text}")
             content = f"{request.text}。一文で簡潔に答えてください。"
         else:
             content = f"「{request.text}」という文に対して、以下の「」内からどれか一つを選択して、それだけ回答してください。\n「えーと。」「はい。」「うーん。」「いいえ。」「はい、そうですね。」「そうですね…。」「いいえ、違います。」「こんにちは。」「ありがとうございます。」「なるほど。」「まあ。」"
@@ -127,7 +132,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
                 )
                 response += sentence
-        print("")
+        print("finish")
         return gpt_server_pb2.SetGptReply(success=True)
 
     def SendMotion(
@@ -183,9 +188,12 @@ def main() -> None:
     while True:
         frame = None
         detections = []
-        #try:
-        frame, detections, yolo_tracking.tracklets = yolo_tracking.oakd_tracking_yolo.get_frame()
-        #except BaseException:
+        try:
+            frame, detections, tracklets = yolo_tracking.oakd_tracking_yolo.get_frame()
+        except BaseException:
+            pass
+        if tracklets is not None:
+            yolo_tracking.set_tracklet(tracklets)
         if frame is not None:
             yolo_tracking.oakd_tracking_yolo.display_frame("nn", frame, yolo_tracking.tracklets)
         if cv2.waitKey(1) == ord("q"):
