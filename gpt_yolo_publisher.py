@@ -7,7 +7,7 @@ import grpc
 import threading
 from concurrent import futures
 from typing import Any
-from akari_chatgpt_bot.lib.chat import chat_stream
+from akari_chatgpt_bot.lib.chat import create_message
 from akari_chatgpt_bot.lib.chat_akari_grpc import ChatStreamAkariGrpc
 from akari_chatgpt_bot.lib.conf import OPENAI_APIKEY
 import copy
@@ -23,6 +23,7 @@ import voicevox_server_pb2_grpc
 # OAK-D LITEの視野角
 fov = 56.7
 
+
 class YoloTracking(object):
     def __init__(
         self,
@@ -37,25 +38,6 @@ class YoloTracking(object):
         self.tracklets = []
         self.labels = self.oakd_tracking_yolo.get_labels()
 
-    '''
-    def update(self) -> None:
-        while True:
-            frame = None
-            detections = []
-            try:
-                frame, detections, self.tracklets = self.oakd_tracking_yolo.get_frame()
-            except BaseException:
-                print("===================")
-                print("get_frame() error! Reboot OAK-D.")
-                print("If reboot occur frequently, Bandwidth may be too much.")
-                print("Please lower FPS.")
-                print("==================")
-                break
-            if frame is not None:
-                self.oakd_tracking_yolo.display_frame("nn", frame, tracklets)
-            if cv2.waitKey(1) == ord("q"):
-                break
-    '''
     def set_tracklet(self, tracklets: Any) -> None:
         self.tracklets = tracklets
 
@@ -77,7 +59,9 @@ class YoloTracking(object):
                 else:
                     text += "下"
                 text += "{:.2f} m".format(abs(tracklet.spatialCoordinates.y) / 1000)
-                text += "近さ {:.2f} m".format(abs(tracklet.spatialCoordinates.z) / 1000)
+                text += "近さ {:.2f} m".format(
+                    abs(tracklet.spatialCoordinates.z) / 1000
+                )
                 text += "\n"
         text += "}"
         return text
@@ -89,12 +73,8 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     """
 
     def __init__(self, yolo_tracking: YoloTracking):
-        self.messages = [
-            {
-                "role": "system",
-                "content": "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。認識結果としてあなたから見た左右、上下、奥行きが渡されるので、それに基づいて回答してください。距離はセンチメートルで答えてください",
-            },
-        ]
+        content = "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。認識結果としてあなたから見た左右、上下、奥行きが渡されるので、それに基づいて回答してください。距離はセンチメートルで答えてください"
+        self.messages = [create_message(content, role="system")]
         voicevox_channel = grpc.insecure_channel("localhost:10002")
         self.stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
         self.chat_stream_akari_grpc = ChatStreamAkariGrpc()
@@ -114,7 +94,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         else:
             content = f"「{request.text}」という文に対して、以下の「」内からどれか一つを選択して、それだけ回答してください。\n「えーと。」「はい。」「うーん。」「いいえ。」「はい、そうですね。」「そうですね…。」「いいえ、違います。」「こんにちは。」「ありがとうございます。」「なるほど。」「まあ。」"
         tmp_messages = copy.deepcopy(self.messages)
-        tmp_messages.append({"role": "user", "content": content})
+        tmp_messages.append(create_message(content))
         if request.is_finish:
             self.messages = copy.deepcopy(tmp_messages)
         if request.is_finish:
@@ -123,7 +103,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                 self.stub.SetVoicevox(
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
                 )
-                self.messages.append({"role": "assistant", "content": response})
+                self.messages.append(create_message(response, role="assistant"))
                 response += sentence
         else:
             for sentence in self.chat_stream_akari_grpc.chat_and_motion(tmp_messages):
@@ -195,10 +175,13 @@ def main() -> None:
         if tracklets is not None:
             yolo_tracking.set_tracklet(tracklets)
         if frame is not None:
-            yolo_tracking.oakd_tracking_yolo.display_frame("nn", frame, yolo_tracking.tracklets)
+            yolo_tracking.oakd_tracking_yolo.display_frame(
+                "nn", frame, yolo_tracking.tracklets
+            )
         if cv2.waitKey(1) == ord("q"):
             end = True
             break
+
 
 if __name__ == "__main__":
     main()
