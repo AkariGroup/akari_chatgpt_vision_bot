@@ -47,14 +47,12 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         else:
             content = f"「{request.text}」という文に対して、以下の「」内からどれか一つを選択して、それだけ回答してください。\n「えーと。」「はい。」「うーん。」「いいえ。」「はい、そうですね。」「そうですね…。」「いいえ、違います。」「こんにちは。」「ありがとうございます。」「なるほど。」「まあ。」"
         tmp_messages = copy.deepcopy(self.messages)
-        print(content)
         if request.is_finish:
             tmp_messages.append(create_vision_message(content, self.frame))
-            self.messages = copy.deepcopy(tmp_messages)
+            #self.messages = copy.deepcopy(tmp_messages)
         else:
             tmp_messages.append(create_message(content))
         if request.is_finish:
-            print("sending...")
             for sentence in self.chat_stream_akari_grpc.chat(
                 tmp_messages, model="gpt-4-vision-preview"
             ):
@@ -105,7 +103,7 @@ def main() -> None:
     cam_rgb.setBoardSocket(dai.CameraBoardSocket.RGB)
     cam_rgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
     cam_rgb.setVideoSize(1920, 1080)
-    cam_rgb.setFPS(10)
+    cam_rgb.setFps(10)
     cam_rgb.video.link(xout_video.input)
     xout_video.input.setBlocking(False)
     xout_video.input.setQueueSize(1)

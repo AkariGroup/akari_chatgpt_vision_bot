@@ -89,14 +89,13 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         print(f"Receive: {request.text}")
         if request.is_finish:
             request.text += self.yolo_tracking.get_result_text()
-            print(f"result: {request.text}")
             content = f"{request.text}。一文で簡潔に答えてください。"
         else:
             content = f"「{request.text}」という文に対して、以下の「」内からどれか一つを選択して、それだけ回答してください。\n「えーと。」「はい。」「うーん。」「いいえ。」「はい、そうですね。」「そうですね…。」「いいえ、違います。」「こんにちは。」「ありがとうございます。」「なるほど。」「まあ。」"
         tmp_messages = copy.deepcopy(self.messages)
         tmp_messages.append(create_message(content))
-        if request.is_finish:
-            self.messages = copy.deepcopy(tmp_messages)
+        #if request.is_finish:
+        #    self.messages = copy.deepcopy(tmp_messages)
         if request.is_finish:
             for sentence in self.chat_stream_akari_grpc.chat(tmp_messages):
                 print(f"Send voicevox: {sentence}")
@@ -112,7 +111,6 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
                 )
                 response += sentence
-        print("finish")
         return gpt_server_pb2.SetGptReply(success=True)
 
     def SendMotion(
