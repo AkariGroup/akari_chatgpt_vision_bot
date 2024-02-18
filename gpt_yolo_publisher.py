@@ -53,13 +53,13 @@ class YoloTracking(object):
                     text += "右"
                 else:
                     text += "左"
-                text += "{:.2f} m".format(abs(tracklet.spatialCoordinates.x) / 1000)
+                text += "{:.2f}メートル".format(abs(tracklet.spatialCoordinates.x) / 1000)
                 if tracklet.spatialCoordinates.y >= 0:
                     text += "上"
                 else:
                     text += "下"
-                text += "{:.2f} m".format(abs(tracklet.spatialCoordinates.y) / 1000)
-                text += "近さ {:.2f} m".format(
+                text += "{:.2f}メートル".format(abs(tracklet.spatialCoordinates.y) / 1000)
+                text += "近さ {:.2f}メートル".format(
                     abs(tracklet.spatialCoordinates.z) / 1000
                 )
                 text += "\n"
@@ -73,7 +73,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     """
 
     def __init__(self, yolo_tracking: YoloTracking):
-        content = "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。認識結果としてあなたから見た左右、上下、奥行きが渡されるので、それに基づいて回答してください。距離はセンチメートルで答えてください"
+        content = "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。物体の認識結果は、カメラロボットであるあなたから見た距離です。質問の内容によっては回答に使ってください。"
         self.messages = [create_message(content, role="system")]
         voicevox_channel = grpc.insecure_channel("localhost:10002")
         self.stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
@@ -89,15 +89,13 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         print(f"Receive: {request.text}")
         if request.is_finish:
             request.text += self.yolo_tracking.get_result_text()
-            content = f"{request.text}。一文で簡潔に答えてください。"
+            content = f"{request.text}。回答は一文で短くまとめて答えてください。"
         else:
             content = f"「{request.text}」という文に対して、以下の「」内からどれか一つを選択して、それだけ回答してください。\n「えーと。」「はい。」「うーん。」「いいえ。」「はい、そうですね。」「そうですね…。」「いいえ、違います。」「こんにちは。」「ありがとうございます。」「なるほど。」「まあ。」"
         tmp_messages = copy.deepcopy(self.messages)
         tmp_messages.append(create_message(content))
-        #if request.is_finish:
-        #    self.messages = copy.deepcopy(tmp_messages)
         if request.is_finish:
-            for sentence in self.chat_stream_akari_grpc.chat(tmp_messages):
+            for sentence in self.chat_stream_akari_grpc.chat(tmp_messages, model="gpt-4"):
                 print(f"Send voicevox: {sentence}")
                 self.stub.SetVoicevox(
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
