@@ -65,7 +65,7 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
    `cd script`  
    `./vision_chatbot.sh {1.でVoicevoxを起動したPCのIPアドレス} {akari_motion_serverのパス}`  
 
-   akari_motion_serverのパスを入力しなければ、akari_motion_serverは起動せず、モーションの再生は行われません(AKARI以外でも使えます)。  
+   akari_motion_serverのパスを入力しなければ、akari_motion_serverは起動せず、モーションの再生は行われません(OAK-Dがあれば、AKARI以外でも使えます)。  
 
 3. カメラの画像表示をするウィンドウが起動したら、`speech_publisher.py`のターミナルでEnterキーを押し、マイクに話しかけるとカメラ画像の表示されているウィンドウに基づいた返答が返ってくる。  
 
@@ -122,7 +122,7 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
    `cd script`  
    `./yolo_chatbot.sh {1.でVoicevoxを起動したPCのIPアドレス} {akari_motion_serverのパス}`  
 
-   akari_motion_serverのパスを入力しなければ、akari_motion_serverは起動せず、モーションの再生は行われません(AKARI以外でも使えます)。  
+   akari_motion_serverのパスを入力しなければ、akari_motion_serverは起動せず、モーションの再生は行われません(OAK-Dがあれば、AKARI以外でも使えます)。  
 
 3. カメラの画像表示をするウィンドウが起動したら、`speech_publisher.py`のターミナルでEnterキーを押し、マイクに話しかけるとカメラ画像のウィンドウに表示されている物体認識結果に基づいた返答が返ってくる。  
 
