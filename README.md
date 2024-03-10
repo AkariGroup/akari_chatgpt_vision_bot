@@ -19,7 +19,7 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
 
 ![GPT-4V版図解](jpg/gpt-4v.jpg "GPT-4V版図解")
 
-[akari_chatgpt_bot](https://github.com/AkariGroup/akari_chatgpt_bot)の遅延なし音声対話botに、GPT-4Vによる画像認識機能を追加したものです。  
+[akari_chatgpt_bot](https://github.com/AkariGroup/akari_chatgpt_bot)の遅延なし音声対話botに、GPT-4V,Claude3による画像認識機能を追加したものです。  
 
 ### 全体図
 
@@ -34,6 +34,7 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
 
 
    引数は下記が使用可能  
+   - `-v`, `--vision_model`: 画像と音声を入力するLLMのモデル。デフォルトは"gpt-4-vision-preview"
    - `--ip`: gpt_serverのIPアドレス。デフォルトは"127.0.0.1"
    - `--port`: gpt_serverのポート。デフォルトは"10001"
 
