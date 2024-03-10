@@ -1,17 +1,15 @@
 import argparse
-
+import copy
 import os
 import sys
-import grpc
 from concurrent import futures
 from typing import Any
-from akari_chatgpt_bot.lib.chat import create_message, create_vision_message
-from akari_chatgpt_bot.lib.chat_akari_grpc import ChatStreamAkariGrpc
-from akari_chatgpt_bot.lib.conf import OPENAI_APIKEY
-import copy
+
 import cv2
-import numpy as np
 import depthai as dai
+import grpc
+import numpy as np
+from akari_chatgpt_bot.lib.chat_akari_grpc import ChatStreamAkariGrpc
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib/grpc"))
 import gpt_server_pb2
@@ -28,12 +26,15 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     chatGPTにtextを送信し、返答をvoicevox_serverに送るgprcサーバ
     """
 
-    def __init__(self):
-        content = "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。認識結果としてあなたから見た左右、上下、奥行きが渡されるので、それに基づいて回答してください。距離はセンチメートルで答えてください"
-        self.messages = [create_message(content, role="system")]
+    def __init__(self, vision_model="gpt-4-vision-preview"):
         voicevox_channel = grpc.insecure_channel("localhost:10002")
         self.stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
         self.chat_stream_akari_grpc = ChatStreamAkariGrpc()
+        content = "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。認識結果としてあなたから見た左右、上下、奥行きが渡されるので、それに基づいて回答してください。距離はセンチメートルで答えてください"
+        self.messages = [
+            self.chat_stream_akari_grpc.create_message(content, role="system")
+        ]
+        self.vision_model = vision_model
 
     def SetGpt(
         self, request: gpt_server_pb2.SetGptRequest(), context: grpc.ServicerContext
@@ -45,23 +46,28 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         if request.is_finish:
             content = f"{request.text}。一文で簡潔に答えてください。"
         else:
-            content = f"「{request.text}」という文に対して、以下の「」内からどれか一つを選択して、それだけ回答してください。\n「えーと。」「はい。」「うーん。」「いいえ。」「はい、そうですね。」「そうですね…。」「いいえ、違います。」「こんにちは。」「ありがとうございます。」「なるほど。」「まあ。」"
+            content = f"「{request.text}。"
         tmp_messages = copy.deepcopy(self.messages)
         if request.is_finish:
-            tmp_messages.append(create_vision_message(content, self.frame))
-            #self.messages = copy.deepcopy(tmp_messages)
+            tmp_messages.append(
+                self.chat_stream_akari_grpc.create_vision_message(
+                    content, self.frame, model=self.vision_model
+                )
+            )
         else:
-            tmp_messages.append(create_message(content))
+            tmp_messages.append(self.chat_stream_akari_grpc.create_message(content))
         if request.is_finish:
             for sentence in self.chat_stream_akari_grpc.chat(
-                tmp_messages, model="gpt-4-vision-preview"
+                tmp_messages, model=self.vision_model
             ):
                 print(f"Send voicevox: {sentence}")
                 self.stub.SetVoicevox(
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
                 )
-                self.messages.append(create_message(response, role="assistant"))
                 response += sentence
+            self.messages.append(
+                self.chat_stream_akari_grpc.create_message(response, role="assistant")
+            )
         else:
             for sentence in self.chat_stream_akari_grpc.chat_and_motion(tmp_messages):
                 print(f"Send voicevox: {sentence}")
@@ -75,7 +81,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     def SendMotion(
         self, request: gpt_server_pb2.SendMotionRequest(), context: grpc.ServicerContext
     ) -> gpt_server_pb2.SendMotionReply:
-        success = self.chat_stream_akari_grpc.send_motion()
+        success = self.chat_stream_akari_grpc.send_reserved_motion()
         return gpt_server_pb2.SendMotionReply(success=success)
 
     def update_frame(self, frame: np.ndarray) -> None:
@@ -89,6 +95,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--port", help="Gpt server port number", default="10001", type=str
+    )
+    parser.add_argument(
+        "-v",
+        "--vision_model",
+        help="LLM model name for vision",
+        default="gpt-4-vision-preview",
+        type=str,
     )
     args = parser.parse_args()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
@@ -119,7 +132,7 @@ def main() -> None:
                 frame = videoIn.getCvFrame()
                 if frame is not None:
                     gpt_server.update_frame(frame)
-                    cv2.imshow("video", cv2.resize(frame, (640,360)))
+                    cv2.imshow("video", cv2.resize(frame, (640, 360)))
                 if cv2.waitKey(1) == ord("q"):
                     break
             device.close()
