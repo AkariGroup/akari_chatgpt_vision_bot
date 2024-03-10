@@ -26,7 +26,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     chatGPTにtextを送信し、返答をvoicevox_serverに送るgprcサーバ
     """
 
-    def __init__(self, vision_model="gpt-4-vision-preview"):
+    def __init__(self, vision_model="claude-3-sonnet-20240229"):
         voicevox_channel = grpc.insecure_channel("localhost:10002")
         self.stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
         self.chat_stream_akari_grpc = ChatStreamAkariGrpc()
@@ -65,9 +65,6 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
                 )
                 response += sentence
-            self.messages.append(
-                self.chat_stream_akari_grpc.create_message(response, role="assistant")
-            )
         else:
             for sentence in self.chat_stream_akari_grpc.chat_and_motion(tmp_messages):
                 print(f"Send voicevox: {sentence}")
