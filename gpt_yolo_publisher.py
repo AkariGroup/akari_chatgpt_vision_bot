@@ -97,7 +97,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         if request.is_finish:
             self.messages = copy.deepcopy(tmp_messages)
             for sentence in self.chat_stream_akari_grpc.chat(
-                tmp_messages, model="claude-3-sonnet-20240229"
+                tmp_messages, model="gpt-4"
             ):
                 print(f"Send voicevox: {sentence}")
                 self.stub.SetVoicevox(
