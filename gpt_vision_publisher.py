@@ -4,6 +4,7 @@ import os
 import sys
 from concurrent import futures
 from typing import Any
+from gpt_stream_parser import force_parse_json
 
 import cv2
 import depthai as dai
@@ -40,23 +41,23 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         self, request: gpt_server_pb2.SetGptRequest(), context: grpc.ServicerContext
     ) -> gpt_server_pb2.SetGptReply:
         response = ""
+        is_finish = True
+        if request.HasField("is_finish"):
+            is_finish = request.is_finish
         if len(request.text) < 2:
             return gpt_server_pb2.SetGptReply(success=True)
         print(f"Receive: {request.text}")
-        if request.is_finish:
+        if is_finish:
             content = f"{request.text}。一文で簡潔に答えてください。"
         else:
             content = f"「{request.text}。"
         tmp_messages = copy.deepcopy(self.messages)
-        if request.is_finish:
+        if is_finish:
             tmp_messages.append(
                 self.chat_stream_akari_grpc.create_vision_message(
                     content, self.frame, model=self.vision_model
                 )
             )
-        else:
-            tmp_messages.append(self.chat_stream_akari_grpc.create_message(content))
-        if request.is_finish:
             for sentence in self.chat_stream_akari_grpc.chat(
                 tmp_messages, model=self.vision_model
             ):
@@ -66,13 +67,13 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                 )
                 response += sentence
         else:
+            tmp_messages.append(self.chat_stream_akari_grpc.create_message(content))
             for sentence in self.chat_stream_akari_grpc.chat_and_motion(tmp_messages):
                 print(f"Send voicevox: {sentence}")
                 self.stub.SetVoicevox(
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
                 )
                 response += sentence
-        print("finish")
         return gpt_server_pb2.SetGptReply(success=True)
 
     def SendMotion(
@@ -83,6 +84,103 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
 
     def update_frame(self, frame: np.ndarray) -> None:
         self.frame = frame
+
+
+class SelectiveGptServer(GptServer):
+    def judge_use_vision_anthropic(
+        self, messages, model="claude-3-haiku-20240307", temperature=0.7
+    ) -> bool:
+        system_message = ""
+        user_messages = []
+        for message in messages:
+            if message["role"] == "system":
+                system_message = message["content"]
+            else:
+                user_messages.append(message)
+        user_messages[-1][
+            "content"
+        ] = f'「{user_messages[-1]["content"]}」に対して、画像を見て判断するか、そのまま回答するかを決定し、下記のJSON形式で出力して下さい。{{"vision": "画像を使う場合はTrue、使わない場合はFalse", "talk": "画像を使う場合は空白、使わない場合は回答のテキストを出力"}}'
+        with self.anthropic_client.messages.stream(
+            model=model,
+            max_tokens=1000,
+            temperature=temperature,
+            messages=user_messages,
+            system=system_message,
+        ) as result:
+            full_response = ""
+            real_time_response = ""
+            sentence_index = 0
+            for text in result.text_stream:
+                if text is None:
+                    pass
+                else:
+                    full_response += text
+                    real_time_response += text
+                    try:
+                        data_json = json.loads(full_response)
+                        found_last_char = False
+                        for char in self.last_char:
+                            if real_time_response[-1].find(char) >= 0:
+                                found_last_char = True
+                        if not found_last_char:
+                            data_json["talk"] = data_json["talk"] + "。"
+                    except BaseException:
+                        data_json = force_parse_json(full_response)
+                    if data_json is not None:
+                        if "vision" in data_json:
+                            if bool(data_json["vision"]):
+                                return True
+                            if "talk" in data_json:
+                                real_time_response = str(data_json["talk"])
+                                for char in self.last_char:
+                                    pos = real_time_response[sentence_index:].find(char)
+                                    if pos >= 0:
+                                        sentence = real_time_response[
+                                            sentence_index : sentence_index + pos + 1
+                                        ]
+                                        sentence_index += pos + 1
+                                        yield sentence
+                                        break
+            return False
+
+    def SetGpt(
+        self, request: gpt_server_pb2.SetGptRequest(), context: grpc.ServicerContext
+    ) -> gpt_server_pb2.SetGptReply:
+        response = ""
+        is_finish = True
+        if request.HasField("is_finish"):
+            is_finish = request.is_finish
+        if len(request.text) < 2:
+            return gpt_server_pb2.SetGptReply(success=True)
+        print(f"Receive: {request.text}")
+        if is_finish:
+            content = f"{request.text}。一文で簡潔に答えてください。"
+        else:
+            content = f"「{request.text}。"
+        tmp_messages = copy.deepcopy(self.messages)
+        if is_finish:
+            tmp_messages.append(
+                self.chat_stream_akari_grpc.create_vision_message(
+                    content, self.frame, model=self.vision_model
+                )
+            )
+            for sentence in self.chat_stream_akari_grpc.chat(
+                tmp_messages, model=self.vision_model
+            ):
+                print(f"Send voicevox: {sentence}")
+                self.stub.SetVoicevox(
+                    voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
+                )
+                response += sentence
+        else:
+            tmp_messages.append(self.chat_stream_akari_grpc.create_message(content))
+            for sentence in self.chat_stream_akari_grpc.chat_and_motion(tmp_messages):
+                print(f"Send voicevox: {sentence}")
+                self.stub.SetVoicevox(
+                    voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
+                )
+                response += sentence
+        return gpt_server_pb2.SetGptReply(success=True)
 
 
 def main() -> None:
