@@ -3,12 +3,13 @@ import copy
 import os
 import sys
 from concurrent import futures
-from typing import Any
 from gpt_stream_parser import force_parse_json
+from distutils.util import strtobool
 
 import cv2
 import depthai as dai
 import grpc
+import json
 import numpy as np
 from akari_chatgpt_bot.lib.chat_akari_grpc import ChatStreamAkariGrpc
 
@@ -17,6 +18,8 @@ import gpt_server_pb2
 import gpt_server_pb2_grpc
 import voicevox_server_pb2
 import voicevox_server_pb2_grpc
+import motion_server_pb2
+import motion_server_pb2_grpc
 
 # OAK-D LITEの視野角
 fov = 56.7
@@ -31,7 +34,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         voicevox_channel = grpc.insecure_channel("localhost:10002")
         self.stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
         self.chat_stream_akari_grpc = ChatStreamAkariGrpc()
-        content = "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。認識結果としてあなたから見た左右、上下、奥行きが渡されるので、それに基づいて回答してください。距離はセンチメートルで答えてください"
+        content = "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。"
         self.messages = [
             self.chat_stream_akari_grpc.create_message(content, role="system")
         ]
@@ -87,21 +90,27 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
 
 
 class SelectiveGptServer(GptServer):
-    def judge_use_vision_anthropic(
-        self, messages, model="claude-3-haiku-20240307", temperature=0.7
-    ) -> bool:
+    def selective_vision_chat_anthropic(
+        self, messages, content, frame, temperature=0.7
+    ) -> str:
+        response = ""
+        use_vision = False
+        judge_messages = messages
+        judge_content = f"「{content}」に対して、画像を見て判断するか、そのまま回答するかを決定し、下記のJSON形式で出力して下さい。{{\"vision\": \"画像を使う場合は\"True\"、使わない場合は\"False\"\", \"talk\": \"画像を使う場合は空白、使わない場合は回答のテキストを出力\"}}"
+        judge_message = self.chat_stream_akari_grpc.create_message(judge_content)
+        judge_messages.append(judge_message)
+
         system_message = ""
         user_messages = []
-        for message in messages:
+        for message in judge_messages:
             if message["role"] == "system":
                 system_message = message["content"]
             else:
                 user_messages.append(message)
-        user_messages[-1][
-            "content"
-        ] = f'「{user_messages[-1]["content"]}」に対して、画像を見て判断するか、そのまま回答するかを決定し、下記のJSON形式で出力して下さい。{{"vision": "画像を使う場合はTrue、使わない場合はFalse", "talk": "画像を使う場合は空白、使わない場合は回答のテキストを出力"}}'
-        with self.anthropic_client.messages.stream(
-            model=model,
+
+        # Visionを使うかどうか判定。使わない場合はそのまま発話
+        with self.chat_stream_akari_grpc.anthropic_client.messages.stream(
+            model=self.vision_model,
             max_tokens=1000,
             temperature=temperature,
             messages=user_messages,
@@ -119,7 +128,7 @@ class SelectiveGptServer(GptServer):
                     try:
                         data_json = json.loads(full_response)
                         found_last_char = False
-                        for char in self.last_char:
+                        for char in self.chat_stream_akari_grpc.last_char:
                             if real_time_response[-1].find(char) >= 0:
                                 found_last_char = True
                         if not found_last_char:
@@ -128,20 +137,62 @@ class SelectiveGptServer(GptServer):
                         data_json = force_parse_json(full_response)
                     if data_json is not None:
                         if "vision" in data_json:
-                            if bool(data_json["vision"]):
-                                return True
+                            print(data_json)
+                            if strtobool(data_json["vision"]):
+                                use_vision = True
                             if "talk" in data_json:
                                 real_time_response = str(data_json["talk"])
-                                for char in self.last_char:
+                                for char in self.chat_stream_akari_grpc.last_char:
                                     pos = real_time_response[sentence_index:].find(char)
                                     if pos >= 0:
                                         sentence = real_time_response[
                                             sentence_index : sentence_index + pos + 1
                                         ]
                                         sentence_index += pos + 1
-                                        yield sentence
-                                        break
-            return False
+                                        response += sentence
+                                        if not use_vision:
+                                            print(f"Send voicevox: {sentence}")
+                                            self.stub.SetVoicevox(
+                                                voicevox_server_pb2.SetVoicevoxRequest(
+                                                    text=sentence
+                                                )
+                                            )
+            print(full_response)
+        if use_vision:
+            self.stub.SetVoicevox(voicevox_server_pb2.SetVoicevoxRequest(text="えーと"))
+            try:
+                self.chat_stream_akari_grpc.motion_stub.SetMotion(
+                    motion_server_pb2.SetMotionRequest(
+                        name="lookup", priority=3, repeat=False, clear=True
+                    )
+                )
+            except BaseException:
+                print("send error!")
+                pass
+            print("use_vision")
+            # Visionを使う場合は再度質問
+            vision_messages = messages
+            vision_message = self.chat_stream_akari_grpc.create_vision_message(
+                text=judge_content, image=frame, model=self.vision_model
+            )
+            vision_messages.append(vision_message)
+            response = ""
+            system_message = ""
+            user_messages = []
+            for message in judge_messages:
+                if message["role"] == "system":
+                    system_message = message["content"]
+                else:
+                    user_messages.append(message)
+            for sentence in self.chat_stream_akari_grpc.chat_and_motion(
+                messages=vision_messages, model=self.vision_model
+            ):
+                print(f"Send voicevox: {sentence}")
+                self.stub.SetVoicevox(
+                    voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
+                )
+                response += sentence
+        return response
 
     def SetGpt(
         self, request: gpt_server_pb2.SetGptRequest(), context: grpc.ServicerContext
@@ -159,19 +210,11 @@ class SelectiveGptServer(GptServer):
             content = f"「{request.text}。"
         tmp_messages = copy.deepcopy(self.messages)
         if is_finish:
-            tmp_messages.append(
-                self.chat_stream_akari_grpc.create_vision_message(
-                    content, self.frame, model=self.vision_model
-                )
+            response += self.selective_vision_chat_anthropic(
+                tmp_messages,
+                content,
+                self.frame,
             )
-            for sentence in self.chat_stream_akari_grpc.chat(
-                tmp_messages, model=self.vision_model
-            ):
-                print(f"Send voicevox: {sentence}")
-                self.stub.SetVoicevox(
-                    voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
-                )
-                response += sentence
         else:
             tmp_messages.append(self.chat_stream_akari_grpc.create_message(content))
             for sentence in self.chat_stream_akari_grpc.chat_and_motion(tmp_messages):
@@ -195,12 +238,20 @@ def main() -> None:
         "-v",
         "--vision_model",
         help="LLM model name for vision",
-        default="gpt-4-vision-preview",
+        default="claude-3-haiku-20240307",
         type=str,
+    )
+    parser.add_argument(
+        "--selective",
+        help="Use selective vision bot",
+        action="store_true",
     )
     args = parser.parse_args()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    gpt_server = GptServer()
+    if args.selective:
+        gpt_server = SelectiveGptServer()
+    else:
+        gpt_server = GptServer()
     gpt_server_pb2_grpc.add_GptServerServiceServicer_to_server(gpt_server, server)
     server.add_insecure_port(args.ip + ":" + args.port)
     server.start()
