@@ -96,7 +96,7 @@ class SelectiveGptServer(GptServer):
         response = ""
         use_vision = False
         judge_messages = copy.deepcopy(messages)
-        judge_content = f"「{content}」に対して、画像を見て回答するか、見ないで回答するかを決定し、下記のJSON形式で出力して下さい。{{\"vision\": \"画像を見る場合は\"True\"、見ない場合は\"False\"\", \"talk\": \"画像を見る場合は空白、見ない場合は回答のテキストを出力\"}}"
+        judge_content = f"「{content}」に対して、画像を見て回答するか、見ないで回答するかを決定し、下記のJSON形式で出力して下さい。{{\"vision\": \"画像を見る場合は \"True\" 、見ない場合は \"False\" \", \"talk\": \"画像を見る場合は空白、見ない場合は回答のテキストを出力\"}}"
         judge_message = self.chat_stream_akari_grpc.create_message(judge_content)
         judge_messages.append(judge_message)
 
@@ -137,7 +137,6 @@ class SelectiveGptServer(GptServer):
                         data_json = force_parse_json(full_response)
                     if data_json is not None:
                         if "vision" in data_json:
-                            print(data_json)
                             if strtobool(data_json["vision"]):
                                 use_vision = True
                             if "talk" in data_json:
@@ -158,7 +157,6 @@ class SelectiveGptServer(GptServer):
                                                     text=sentence
                                                 )
                                             )
-        print(full_response)
         if use_vision:
             self.stub.SetVoicevox(voicevox_server_pb2.SetVoicevoxRequest(text="えーと"))
             try:
@@ -170,7 +168,6 @@ class SelectiveGptServer(GptServer):
             except BaseException:
                 print("send error!")
                 pass
-            print("use_vision")
             # Visionを使う場合は再度質問
             vision_messages = copy.deepcopy(messages)
             vision_message = self.chat_stream_akari_grpc.create_vision_message(
@@ -185,7 +182,6 @@ class SelectiveGptServer(GptServer):
                     system_message = message["content"]
                 else:
                     user_messages.append(message)
-            print(vision_messages)
             for sentence in self.chat_stream_akari_grpc.chat_and_motion(
                 messages=vision_messages, model=self.vision_model
             ):
@@ -207,7 +203,7 @@ class SelectiveGptServer(GptServer):
             return gpt_server_pb2.SetGptReply(success=True)
         print(f"Receive: {request.text}")
         if is_finish:
-            content = f"{request.text}。一文で簡潔に答えてください。"
+            content = f"{request.text}。"
         else:
             content = f"「{request.text}。"
         tmp_messages = copy.deepcopy(self.messages)
