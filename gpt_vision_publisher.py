@@ -4,7 +4,6 @@ import os
 import sys
 from concurrent import futures
 from gpt_stream_parser import force_parse_json
-from distutils.util import strtobool
 
 import cv2
 import depthai as dai
@@ -61,6 +60,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                     content, self.frame, model=self.vision_model
                 )
             )
+            print(tmp_messages)
             for sentence in self.chat_stream_akari_grpc.chat(
                 tmp_messages, model=self.vision_model
             ):
@@ -96,7 +96,7 @@ class SelectiveGptServer(GptServer):
         response = ""
         use_vision = False
         judge_messages = copy.deepcopy(messages)
-        judge_content = f"「{content}」に対して、画像を見て回答するか、見ないで回答するかを決定し、下記のJSON形式で出力して下さい。{{\"vision\": \"画像を見る場合は \"True\" 、見ない場合は \"False\" \", \"talk\": \"画像を見る場合は空白、見ない場合は回答のテキストを出力\"}}"
+        judge_content = f"「{content}」に対して、画像を見て回答するか、見ないで回答するかを決定し、下記のJSON形式で出力して下さい。{{\"vision\": \"画像を見る場合は \"1\" 、見ない場合は \"0\" \", \"talk\": \"画像を見る場合は空白、見ない場合は回答のテキストを出力\"}}"
         judge_message = self.chat_stream_akari_grpc.create_message(judge_content)
         judge_messages.append(judge_message)
 
@@ -136,8 +136,9 @@ class SelectiveGptServer(GptServer):
                     except BaseException:
                         data_json = force_parse_json(full_response)
                     if data_json is not None:
+                        print(full_response)
                         if "vision" in data_json:
-                            if strtobool(data_json["vision"]):
+                            if data_json["vision"] == "1":
                                 use_vision = True
                             if "talk" in data_json:
                                 real_time_response = str(data_json["talk"])
@@ -203,7 +204,7 @@ class SelectiveGptServer(GptServer):
             return gpt_server_pb2.SetGptReply(success=True)
         print(f"Receive: {request.text}")
         if is_finish:
-            content = f"{request.text}。"
+            content = f"{request.text}。。一文で簡潔に答えてください。"
         else:
             content = f"「{request.text}。"
         tmp_messages = copy.deepcopy(self.messages)
