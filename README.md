@@ -13,11 +13,11 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
 ## セットアップ方法
 [akari_chatgpt_botのREADME](https://github.com/AkariGroup/akari_chatgpt_bot/blob/main/README.md)のセットアップ手順に沿って実行する。
 
-## 音声対話bot(GPT-4V版)
+## 音声対話bot(VLM版)
 
 ### 概要
 
-![GPT-4V版図解](jpg/gpt-4v.jpg "GPT-4V版図解")
+![VLM版図解](jpg/gpt-4v.jpg "VLM版図解")
 
 [akari_chatgpt_bot](https://github.com/AkariGroup/akari_chatgpt_bot)の遅延なし音声対話botに、GPT-4V,Claude3による画像認識機能を追加したものです。  
 
@@ -37,6 +37,7 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
    - `-v`, `--vision_model`: 画像と音声を入力するLLMのモデル。デフォルトは"gpt-4-vision-preview"
    - `--ip`: gpt_serverのIPアドレス。デフォルトは"127.0.0.1"
    - `--port`: gpt_serverのポート。デフォルトは"10001"
+   - `--selective`: このオプションをつけると、画像を用いて回答するかどうかをLLMが判別してから回答を返すようになる。"
 
 3. speech_publisher.pyを起動する。(Google音声認識の結果をgpt_publisherへ渡す。)  
    **--no_motionオプションをつけること(つけないと音声認識中にうなずきが再生されてしまい、画像が正しく取得できません。)**
@@ -64,7 +65,10 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
 2. スクリプトを実行する。  
 
    `cd script`  
+   (毎回画像を用いて回答させる場合)
    `./vision_chatbot.sh {1.でVoicevoxを起動したPCのIPアドレス} {akari_motion_serverのパス}`  
+   (画像を使うかどうかを都度LLMに判断させて回答させる場合)
+   `./selective_vision_chatbot.sh {1.でVoicevoxを起動したPCのIPアドレス} {akari_motion_serverのパス}`  
 
    akari_motion_serverのパスを入力しなければ、akari_motion_serverは起動せず、モーションの再生は行われません(OAK-Dがあれば、AKARI以外でも使えます)。  
 
