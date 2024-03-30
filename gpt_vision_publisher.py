@@ -60,7 +60,6 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                     content, self.frame, model=self.vision_model
                 )
             )
-            print(tmp_messages)
             for sentence in self.chat_stream_akari_grpc.chat(
                 tmp_messages, model=self.vision_model
             ):
@@ -71,7 +70,9 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                 response += sentence
         else:
             tmp_messages.append(self.chat_stream_akari_grpc.create_message(content))
-            for sentence in self.chat_stream_akari_grpc.chat_and_motion(tmp_messages):
+            for sentence in self.chat_stream_akari_grpc.chat_and_motion(
+                tmp_messages, short_response=True
+            ):
                 print(f"Send voicevox: {sentence}")
                 self.stub.SetVoicevox(
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
@@ -90,13 +91,17 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
 
 
 class SelectiveGptServer(GptServer):
+    def __init__(self, vision_model="claude-3-sonnet-20240229"):
+        super().__init__(vision_model)
+        self.sent_motion = True  # モーションを送信し終わったか
+
     def selective_vision_chat_anthropic(
         self, messages, content, frame, temperature=0.7
     ) -> str:
         response = ""
         use_vision = False
         judge_messages = copy.deepcopy(messages)
-        judge_content = f"「{content}」に対して、画像を見て回答するか、見ないで回答するかを決定し、下記のJSON形式で出力して下さい。{{\"vision\": \"画像を見る場合は \"1\" 、見ない場合は \"0\" \", \"talk\": \"画像を見る場合は空白、見ない場合は回答のテキストを出力\"}}"
+        judge_content = f'「{content}」に対して、画像を見て回答した方がいいか、見ないで回答した方がいいかを決定し、下記のJSON形式で出力して下さい。{{"vision": "画像を見る場合は "1" 、見ない場合は "0" string型で回答", "talk": "画像を見る場合は空白、見ない場合は回答のテキストを出力"}}'
         judge_message = self.chat_stream_akari_grpc.create_message(judge_content)
         judge_messages.append(judge_message)
 
@@ -136,7 +141,6 @@ class SelectiveGptServer(GptServer):
                     except BaseException:
                         data_json = force_parse_json(full_response)
                     if data_json is not None:
-                        print(full_response)
                         if "vision" in data_json:
                             if data_json["vision"] == "1":
                                 use_vision = True
@@ -151,7 +155,10 @@ class SelectiveGptServer(GptServer):
                                         sentence_index += pos + 1
                                         response += sentence
                                         if not use_vision:
-                                            self.chat_stream_akari_grpc.send_reserved_motion()
+                                            if not self.sent_motion:
+                                                self.sent_motion = (
+                                                    self.chat_stream_akari_grpc.send_reserved_motion()
+                                                )
                                             print(f"Send voicevox: {sentence}")
                                             self.stub.SetVoicevox(
                                                 voicevox_server_pb2.SetVoicevoxRequest(
@@ -183,9 +190,13 @@ class SelectiveGptServer(GptServer):
                     system_message = message["content"]
                 else:
                     user_messages.append(message)
-            for sentence in self.chat_stream_akari_grpc.chat_and_motion(
+            for sentence in self.chat_stream_akari_grpc.chat(
                 messages=vision_messages, model=self.vision_model
             ):
+                if not self.sent_motion:
+                    self.sent_motion = (
+                        self.chat_stream_akari_grpc.send_reserved_motion()
+                    )
                 print(f"Send voicevox: {sentence}")
                 self.stub.SetVoicevox(
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
@@ -216,16 +227,19 @@ class SelectiveGptServer(GptServer):
             )
         else:
             tmp_messages.append(self.chat_stream_akari_grpc.create_message(content))
-            for sentence in self.chat_stream_akari_grpc.chat_and_motion(tmp_messages,model="claude-3-haiku-20240307"):
+            self.sent_motion = False
+            for sentence in self.chat_stream_akari_grpc.chat_and_motion(
+                tmp_messages, model="claude-3-haiku-20240307", short_response=True
+            ):
                 response += sentence
         return gpt_server_pb2.SetGptReply(success=True)
 
     def SendMotion(
         self, request: gpt_server_pb2.SendMotionRequest(), context: grpc.ServicerContext
     ) -> gpt_server_pb2.SendMotionReply:
-        '''音声認識からの送信司令は無視する。
-        '''
+        """音声認識からの送信司令は無視する。"""
         return gpt_server_pb2.SendMotionReply(success=True)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
