@@ -29,7 +29,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     chatGPTにtextを送信し、返答をvoicevox_serverに送るgprcサーバ
     """
 
-    def __init__(self, vision_model="claude-3-sonnet-20240229"):
+    def __init__(self, vision_model="gpt-4-vision-preview"):
         voicevox_channel = grpc.insecure_channel("localhost:10002")
         self.stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
         self.chat_stream_akari_grpc = ChatStreamAkariGrpc()
@@ -91,8 +91,13 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
 
 
 class SelectiveGptServer(GptServer):
-    def __init__(self, vision_model="claude-3-sonnet-20240229"):
+    def __init__(
+        self,
+        judge_model="claude-3-haiku-20240307",
+        vision_model="gpt-4-vision-preview",
+    ):
         super().__init__(vision_model)
+        self.judge_model = judge_model
         self.sent_motion = True  # モーションを送信し終わったか
 
     def selective_vision_chat_anthropic(
@@ -115,7 +120,7 @@ class SelectiveGptServer(GptServer):
 
         # Visionを使うかどうか判定。使わない場合はそのまま発話
         with self.chat_stream_akari_grpc.anthropic_client.messages.stream(
-            model=self.vision_model,
+            model=self.judge_model,
             max_tokens=1000,
             temperature=temperature,
             messages=user_messages,
@@ -250,10 +255,17 @@ def main() -> None:
         "--port", help="Gpt server port number", default="10001", type=str
     )
     parser.add_argument(
+        "-j",
+        "--judge_model",
+        help="LLM model name to judge whether to use vision",
+        default="claude-3-haiku-20240307",
+        type=str,
+    )
+    parser.add_argument(
         "-v",
         "--vision_model",
         help="LLM model name for vision",
-        default="claude-3-haiku-20240307",
+        default="gpt-4-vision-preview",
         type=str,
     )
     parser.add_argument(
@@ -264,9 +276,11 @@ def main() -> None:
     args = parser.parse_args()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     if args.selective:
-        gpt_server = SelectiveGptServer()
+        gpt_server = SelectiveGptServer(
+            judge_model=args.judge_model, vision_model=args.vision_model
+        )
     else:
-        gpt_server = GptServer()
+        gpt_server = GptServer(vision_model=args.vision_model)
     gpt_server_pb2_grpc.add_GptServerServiceServicer_to_server(gpt_server, server)
     server.add_insecure_port(args.ip + ":" + args.port)
     server.start()

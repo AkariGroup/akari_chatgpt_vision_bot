@@ -34,10 +34,11 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
 
 
    引数は下記が使用可能  
-   - `-v`, `--vision_model`: 画像と音声を入力するLLMのモデル。デフォルトは"gpt-4-vision-preview"
-   - `--ip`: gpt_serverのIPアドレス。デフォルトは"127.0.0.1"
-   - `--port`: gpt_serverのポート。デフォルトは"10001"
-   - `--selective`: このオプションをつけると、画像を用いて回答するかどうかをLLMが判別してから回答を返すようになる。"
+   - `-v`, `--vision_model`: 画像と音声を入力するLLMのモデル。デフォルトは"gpt-4-vision-preview"  
+   - `--ip`: gpt_serverのIPアドレス。デフォルトは"127.0.0.1"  
+   - `--port`: gpt_serverのポート。デフォルトは"10001"  
+   - `--selective`: このオプションをつけると、画像を用いて回答するかどうかをLLMが判別してから回答を返すようになる。"  
+   - `-j`, `--judge_model`: 画像を使用するか判断するLLMのモデル。`--selective`オプションが有効の時のみ使用される。デフォルトは"claude-3-haiku-20240307"。  
 
 3. speech_publisher.pyを起動する。(Google音声認識の結果をgpt_publisherへ渡す。)  
    **--no_motionオプションをつけること(つけないと音声認識中にうなずきが再生されてしまい、画像が正しく取得できません。)**
