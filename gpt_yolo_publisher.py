@@ -51,12 +51,16 @@ class YoloTracking(object):
                     text += "右"
                 else:
                     text += "左"
-                text += "{:.2f}メートル".format(abs(tracklet.spatialCoordinates.x) / 1000)
+                text += "{:.2f}メートル".format(
+                    abs(tracklet.spatialCoordinates.x) / 1000
+                )
                 if tracklet.spatialCoordinates.y >= 0:
                     text += "上"
                 else:
                     text += "下"
-                text += "{:.2f}メートル".format(abs(tracklet.spatialCoordinates.y) / 1000)
+                text += "{:.2f}メートル".format(
+                    abs(tracklet.spatialCoordinates.y) / 1000
+                )
                 text += "近さ {:.2f}メートル".format(
                     abs(tracklet.spatialCoordinates.z) / 1000
                 )
@@ -108,7 +112,9 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                 self.chat_stream_akari_grpc.create_message(response, role="assistant")
             )
         else:
-            for sentence in self.chat_stream_akari_grpc.chat_and_motion(tmp_messages):
+            for sentence in self.chat_stream_akari_grpc.chat_and_motion(
+                tmp_messages, short_response=True
+            ):
                 print(f"Send voicevox: {sentence}")
                 self.stub.SetVoicevox(
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
