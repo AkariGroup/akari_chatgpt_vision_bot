@@ -29,7 +29,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     chatGPTにtextを送信し、返答をvoicevox_serverに送るgprcサーバ
     """
 
-    def __init__(self, vision_model="gpt-4-vision-preview"):
+    def __init__(self, vision_model="gpt-4-turbo"):
         voicevox_channel = grpc.insecure_channel("localhost:10002")
         self.stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
         self.chat_stream_akari_grpc = ChatStreamAkariGrpc()
@@ -94,7 +94,7 @@ class SelectiveGptServer(GptServer):
     def __init__(
         self,
         judge_model="claude-3-haiku-20240307",
-        vision_model="gpt-4-vision-preview",
+        vision_model="gpt-4-turbo",
     ):
         super().__init__(vision_model)
         self.judge_model = judge_model
@@ -265,7 +265,7 @@ def main() -> None:
         "-v",
         "--vision_model",
         help="LLM model name for vision",
-        default="gpt-4-vision-preview",
+        default="gpt-4-turbo",
         type=str,
     )
     parser.add_argument(
