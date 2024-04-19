@@ -4,7 +4,8 @@ import os
 import sys
 import threading
 from concurrent import futures
-from typing import Any,Optional
+from typing import Any, Optional
+import numpy as np
 
 import cv2
 import grpc
@@ -18,55 +19,10 @@ import gpt_server_pb2_grpc
 import voicevox_server_pb2
 import voicevox_server_pb2_grpc
 
-# OAK-D LITEの視野角
-fov = 56.7
-
-
-class YoloGreetCheck(object):
-    def __init__(
-        self,
-        config_path: str,
-        model_path: str,
-        fps: int,
-        fov: float,
-    ) -> None:
-        self.oakd_tracking_yolo = OakdTrackingYolo(
-            config_path=config_path, model_path=model_path, fps=fps, fov=fov
-        )
-        self.tracklets = []
-        self.labels = self.oakd_tracking_yolo.get_labels()
-
-    def set_tracklet(self, tracklets: Any) -> None:
-        self.tracklets = tracklets
-
-    def get_result_text(self) -> str:
-        text = " 認識結果 {\n"
-        if self.tracklets is not None:
-            for tracklet in self.tracklets:
-                if tracklet.status.name != "NEW" and tracklet.status.name != "TRACKED":
-                    continue
-                text += f"種類: {self.labels[tracklet.label]},"
-                text += "あなたから見た位置:"
-                if tracklet.spatialCoordinates.x >= 0:
-                    text += "右"
-                else:
-                    text += "左"
-                text += "{:.2f}メートル".format(
-                    abs(tracklet.spatialCoordinates.x) / 1000
-                )
-                if tracklet.spatialCoordinates.y >= 0:
-                    text += "上"
-                else:
-                    text += "下"
-                text += "{:.2f}メートル".format(
-                    abs(tracklet.spatialCoordinates.y) / 1000
-                )
-                text += "近さ {:.2f}メートル".format(
-                    abs(tracklet.spatialCoordinates.z) / 1000
-                )
-                text += "\n"
-        text += "}"
-        return text
+messages = []
+chat_stream_akari_grpc = ChatStreamAkariGrpc()
+voicevox_channel = grpc.insecure_channel("localhost:10002")
+voicevox_stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
 
 
 class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
@@ -75,17 +31,14 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     """
 
     def __init__(self):
-        voicevox_channel = grpc.insecure_channel("localhost:10002")
-        self.stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
-        self.chat_stream_akari_grpc = ChatStreamAkariGrpc()
+        global messages
         content = "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。物体の認識結果は、カメラロボットであるあなたから見た距離です。質問の内容によっては回答に使ってください。"
-        self.messages = [
-            self.chat_stream_akari_grpc.create_message(content, role="system")
-        ]
+        messages = [chat_stream_akari_grpc.create_message(content, role="system")]
 
     def SetGpt(
         self, request: gpt_server_pb2.SetGptRequest(), context: grpc.ServicerContext
     ) -> gpt_server_pb2.SetGptReply:
+        global messages
         response = ""
         if len(request.text) < 2:
             return gpt_server_pb2.SetGptReply(success=True)
@@ -94,27 +47,27 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
             content = f"{request.text}。回答は一文で短くまとめて答えてください。"
         else:
             content = f"{request.text}。"
-        tmp_messages = copy.deepcopy(self.messages)
-        tmp_messages.append(self.chat_stream_akari_grpc.create_message(content))
+        tmp_messages = copy.deepcopy(messages)
+        tmp_messages.append(chat_stream_akari_grpc.create_message(content))
         if request.is_finish:
-            self.messages = copy.deepcopy(tmp_messages)
-            for sentence in self.chat_stream_akari_grpc.chat(
+            messages = copy.deepcopy(tmp_messages)
+            for sentence in chat_stream_akari_grpc.chat(
                 tmp_messages, model="gpt-4-turbo"
             ):
                 print(f"Send voicevox: {sentence}")
-                self.stub.SetVoicevox(
+                voicevox_stub.SetVoicevox(
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
                 )
                 response += sentence
-            self.messages.append(
-                self.chat_stream_akari_grpc.create_message(response, role="assistant")
+            messages.append(
+                chat_stream_akari_grpc.create_message(response, role="assistant")
             )
         else:
-            for sentence in self.chat_stream_akari_grpc.chat_and_motion(
-                tmp_messages, short_response=True
+            for sentence in chat_stream_akari_grpc.chat_and_motion(
+                tmp_messages, short_response=True, model="gpt-4-turbo"
             ):
                 print(f"Send voicevox: {sentence}")
-                self.stub.SetVoicevox(
+                voicevox_stub.SetVoicevox(
                     voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
                 )
                 response += sentence
@@ -123,8 +76,33 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     def SendMotion(
         self, request: gpt_server_pb2.SendMotionRequest(), context: grpc.ServicerContext
     ) -> gpt_server_pb2.SendMotionReply:
-        success = self.chat_stream_akari_grpc.send_reserved_motion()
+        success = chat_stream_akari_grpc.send_reserved_motion()
         return gpt_server_pb2.SendMotionReply(success=success)
+
+
+def send_greeting_vision_message(frame: np.ndarray, model: str = "gpt-4-turbo") -> None:
+    global messages
+    text = "画像の人の容姿や年齢、服装を見て挨拶の声がけをしてください。簡潔に答えてください。"
+    messages.append(
+        chat_stream_akari_grpc.create_vision_message(
+            text=text,
+            image=frame,
+            model=model,
+            image_width=frame.shape[1],
+            image_height=frame.shape[0],
+        )
+    )
+    response = ""
+    for sentence in chat_stream_akari_grpc.chat(messages, model=model):
+        print(f"Send voicevox: {sentence}")
+        try:
+            voicevox_stub.SetVoicevox(
+                voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
+            )
+        except BaseException:
+            pass
+        response += sentence
+    messages.append(chat_stream_akari_grpc.create_message(response, role="assistant"))
 
 
 def main() -> None:
@@ -208,7 +186,10 @@ def main() -> None:
                         x2 = int(roi.bottomRight().x)
                         y2 = int(roi.bottomRight().y)
                         person_frame = frame[y1:y2, x1:x2]
-                        cv2.imshow("person", person_frame)
+                        greeting_thread = threading.Thread(
+                            target=send_greeting_vision_message, args=(person_frame,)
+                        )
+                        greeting_thread.start()
                         greeting_person_id = tracklet.id
                         break
 
