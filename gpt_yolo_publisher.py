@@ -2,13 +2,11 @@ import argparse
 import copy
 import os
 import sys
-import threading
 from concurrent import futures
 from typing import Any
 
 import cv2
 import grpc
-import openai
 from akari_chatgpt_bot.lib.chat_akari_grpc import ChatStreamAkariGrpc
 from lib.akari_yolo_lib.oakd_tracking_yolo import OakdTrackingYolo
 
@@ -51,16 +49,12 @@ class YoloTracking(object):
                     text += "右"
                 else:
                     text += "左"
-                text += "{:.2f}メートル".format(
-                    abs(tracklet.spatialCoordinates.x) / 1000
-                )
+                text += "{:.2f}メートル".format(abs(tracklet.spatialCoordinates.x) / 1000)
                 if tracklet.spatialCoordinates.y >= 0:
                     text += "上"
                 else:
                     text += "下"
-                text += "{:.2f}メートル".format(
-                    abs(tracklet.spatialCoordinates.y) / 1000
-                )
+                text += "{:.2f}メートル".format(abs(tracklet.spatialCoordinates.y) / 1000)
                 text += "近さ {:.2f}メートル".format(
                     abs(tracklet.spatialCoordinates.z) / 1000
                 )
@@ -172,7 +166,8 @@ def main() -> None:
     server.add_insecure_port(args.ip + ":" + args.port)
     server.start()
     print(f"gpt_publisher start. port: {args.port}")
-    while True:
+    end = False
+    while not end:
         frame = None
         detections = []
         try:

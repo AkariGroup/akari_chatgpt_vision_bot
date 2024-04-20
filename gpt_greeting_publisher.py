@@ -4,12 +4,11 @@ import os
 import sys
 import threading
 from concurrent import futures
-from typing import Any, Optional
-import numpy as np
+from typing import Optional
 
 import cv2
 import grpc
-import openai
+import numpy as np
 from akari_chatgpt_bot.lib.chat_akari_grpc import ChatStreamAkariGrpc
 from lib.akari_yolo_lib.oakd_tracking_yolo import OakdTrackingYolo
 
@@ -83,7 +82,8 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
 def send_greeting_vision_message(frame: np.ndarray, model: str = "gpt-4-turbo") -> None:
     global messages
     text = "画像の人の容姿や年齢、服装を見て挨拶の声がけをしてください。簡潔に答えてください。"
-    messages.append(
+    tmp_messages = copy.deepcopy(messages)
+    tmp_messages.append(
         chat_stream_akari_grpc.create_vision_message(
             text=text,
             image=frame,
@@ -92,15 +92,20 @@ def send_greeting_vision_message(frame: np.ndarray, model: str = "gpt-4-turbo") 
             image_height=frame.shape[0],
         )
     )
+    # 会話履歴にはデータ削減のため画像抜きのデータを残す
+    messages.append(chat_stream_akari_grpc.create_message(text))
     response = ""
-    for sentence in chat_stream_akari_grpc.chat(messages, model=model):
+    for sentence in chat_stream_akari_grpc.chat(tmp_messages, model=model):
         print(f"Send voicevox: {sentence}")
         try:
+            voicevox_stub.SetVoicePlayFlg(
+                voicevox_server_pb2.SetVoicePlayFlgRequest(flg=True)
+            )
             voicevox_stub.SetVoicevox(
                 voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
             )
         except BaseException:
-            pass
+            print("voicevox server send error")
         response += sentence
     messages.append(chat_stream_akari_grpc.create_message(response, role="assistant"))
 
