@@ -23,7 +23,8 @@ chat_stream_akari_grpc = ChatStreamAkariGrpc()
 voicevox_channel = grpc.insecure_channel("localhost:10002")
 voicevox_stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
 
-GREETING_DISTANCE = 2500 # この距離以内に人が来たら声がけする。
+GREETING_DISTANCE = 2500  # この距離以内に人が来たら声がけする。
+
 
 class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     """
