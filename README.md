@@ -140,6 +140,10 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
 [akari_chatgpt_bot](https://github.com/AkariGroup/akari_chatgpt_bot)の遅延なし音声対話botに、AKARI側から自発的に声掛けしてくる機能を追加したものです。  
 YOLOの3次元物体トラッキングを用いて、人を検知したらGPT-4V,Claude3に人の画像を送り、その人にあった声掛けを行うアプリです。AKARIの視界に初めて入った、かつ一定距離以内に近づいた人にのみ声掛けします。  
 
+### 全体図
+
+![構成図](jpg/system_greeting.jpg "構成図")
+
 ### 起動方法
 
 1. [akari_chatgpt_botのREADME](https://github.com/AkariGroup/akari_chatgpt_bot/blob/main/README.md)内 **遅延なし音声対話botの実行** の起動方法1.~3.を実行する。  
