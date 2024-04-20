@@ -1,24 +1,24 @@
 import argparse
 import copy
+import json
 import os
 import sys
 from concurrent import futures
-from gpt_stream_parser import force_parse_json
 
 import cv2
 import depthai as dai
 import grpc
-import json
 import numpy as np
 from akari_chatgpt_bot.lib.chat_akari_grpc import ChatStreamAkariGrpc
+from gpt_stream_parser import force_parse_json
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib/grpc"))
 import gpt_server_pb2
 import gpt_server_pb2_grpc
-import voicevox_server_pb2
-import voicevox_server_pb2_grpc
 import motion_server_pb2
 import motion_server_pb2_grpc
+import voicevox_server_pb2
+import voicevox_server_pb2_grpc
 
 # OAK-D LITEの視野角
 fov = 56.7
