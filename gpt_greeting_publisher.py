@@ -23,6 +23,7 @@ chat_stream_akari_grpc = ChatStreamAkariGrpc()
 voicevox_channel = grpc.insecure_channel("localhost:10002")
 voicevox_stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
 
+GREETING_DISTANCE = 2500 # この距離以内に人が来たら声がけする。
 
 class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     """
@@ -183,7 +184,7 @@ def main() -> None:
                 for tracklet in tracklets:
                     if (
                         tracklet.status.name == "TRACKED"
-                        and tracklet.spatialCoordinates.z <= 2000
+                        and tracklet.spatialCoordinates.z <= GREETING_DISTANCE
                     ):
                         roi = tracklet.roi.denormalize(frame.shape[1], frame.shape[0])
                         x1 = int(roi.topLeft().x)
