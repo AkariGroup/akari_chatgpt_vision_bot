@@ -33,7 +33,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
 
     def __init__(self):
         global messages
-        content = "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。物体の認識結果は、カメラロボットであるあなたから見た距離です。質問の内容によっては回答に使ってください。"
+        content = "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。"
         messages = [chat_stream_akari_grpc.create_message(content, role="system")]
 
     def SetGpt(
