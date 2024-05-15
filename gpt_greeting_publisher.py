@@ -53,7 +53,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         if request.is_finish:
             messages = copy.deepcopy(tmp_messages)
             for sentence in chat_stream_akari_grpc.chat(
-                tmp_messages, model="gpt-4-turbo"
+                tmp_messages, model="gpt-4o"
             ):
                 print(f"Send voicevox: {sentence}")
                 voicevox_stub.SetVoicevox(
@@ -65,7 +65,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
             )
         else:
             for sentence in chat_stream_akari_grpc.chat_and_motion(
-                tmp_messages, short_response=True, model="gpt-4-turbo"
+                tmp_messages, short_response=True, model="gpt-4o"
             ):
                 print(f"Send voicevox: {sentence}")
                 voicevox_stub.SetVoicevox(
@@ -81,7 +81,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         return gpt_server_pb2.SendMotionReply(success=success)
 
 
-def send_greeting_vision_message(frame: np.ndarray, model: str = "gpt-4-turbo") -> None:
+def send_greeting_vision_message(frame: np.ndarray, model: str = "gpt-4o") -> None:
     global messages
     text = "画像の人の容姿や年齢、服装を見て挨拶の声がけをしてください。簡潔に答えてください。"
     tmp_messages = copy.deepcopy(messages)
