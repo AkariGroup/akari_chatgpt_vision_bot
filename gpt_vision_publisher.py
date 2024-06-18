@@ -90,7 +90,7 @@ class SelectiveGptServer(GptServer):
     def __init__(
         self,
         judge_model="claude-3-haiku-20240307",
-        vision_model="gpt-4o",
+        vision_model="claude-3-haiku-20240307",
     ):
         super().__init__(vision_model)
         self.judge_model = judge_model
