@@ -64,7 +64,10 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                 tmp_messages, model=self.vision_model
             ):
                 print(f"Send voice: {sentence}")
-                self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
+                try:
+                    self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
+                except BaseException:
+                    print("voice server send error")
                 response += sentence
         else:
             tmp_messages.append(self.chat_stream_akari_grpc.create_message(content))
@@ -72,7 +75,10 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                 tmp_messages, short_response=True
             ):
                 print(f"Send voice: {sentence}")
-                self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
+                try:
+                    self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
+                except BaseException:
+                    print("voice server send error")
                 response += sentence
         return gpt_server_pb2.SetGptReply(success=True)
 
@@ -161,13 +167,19 @@ class SelectiveGptServer(GptServer):
                                                     self.chat_stream_akari_grpc.send_reserved_motion()
                                                 )
                                             print(f"Send voice: {sentence}")
-                                            self.stub.SetText(
-                                                voice_server_pb2.SetTextRequest(
-                                                    text=sentence
+                                            try:
+                                                self.stub.SetText(
+                                                    voice_server_pb2.SetTextRequest(
+                                                        text=sentence
+                                                    )
                                                 )
-                                            )
+                                            except BaseException:
+                                                print("voice server send error")
         if use_vision:
-            self.stub.SetText(voice_server_pb2.SetTextRequest(text="えーと"))
+            try:
+                self.stub.SetText(voice_server_pb2.SetTextRequest(text="えーと"))
+            except BaseException:
+                print("voice server send error")
             try:
                 self.chat_stream_akari_grpc.motion_stub.SetMotion(
                     motion_server_pb2.SetMotionRequest(
@@ -175,7 +187,7 @@ class SelectiveGptServer(GptServer):
                     )
                 )
             except BaseException:
-                print("send error!")
+                print("send motion error!")
                 pass
             # Visionを使う場合は再度質問
             vision_messages = copy.deepcopy(messages)
@@ -199,7 +211,10 @@ class SelectiveGptServer(GptServer):
                         self.chat_stream_akari_grpc.send_reserved_motion()
                     )
                 print(f"Send voice: {sentence}")
-                self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
+                try:
+                    self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
+                except BaseException:
+                    print("voice server send error")
                 response += sentence
         return response
 

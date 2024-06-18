@@ -98,7 +98,10 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                 tmp_messages, model="gpt-4-turbo"
             ):
                 print(f"Send voice: {sentence}")
-                self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
+                try:
+                    self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
+                except BaseException:
+                    print("voice server send error")
                 response += sentence
             self.messages.append(
                 self.chat_stream_akari_grpc.create_message(response, role="assistant")
@@ -108,7 +111,10 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
                 tmp_messages, short_response=True
             ):
                 print(f"Send voice: {sentence}")
-                self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
+                try:
+                    self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
+                except BaseException:
+                    print("voice server send error")
                 response += sentence
         return gpt_server_pb2.SetGptReply(success=True)
 
