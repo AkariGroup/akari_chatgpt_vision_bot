@@ -29,7 +29,7 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     chatGPTにtextを送信し、返答をvoice_serverに送るgprcサーバ
     """
 
-    def __init__(self, vision_model="gpt-4o"):
+    def __init__(self, vision_model="gpt-4-turbo"):
         voice_channel = grpc.insecure_channel("localhost:10002")
         self.stub = voice_server_pb2_grpc.VoiceServerServiceStub(voice_channel)
         self.chat_stream_akari_grpc = ChatStreamAkariGrpc()
@@ -259,7 +259,7 @@ def main() -> None:
         "-v",
         "--vision_model",
         help="LLM model name for vision",
-        default="gpt-4o",
+        default="gpt-4-turbo",
         type=str,
     )
     parser.add_argument(
