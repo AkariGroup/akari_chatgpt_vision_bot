@@ -15,20 +15,20 @@ from lib.akari_yolo_lib.oakd_tracking_yolo import OakdTrackingYolo
 sys.path.append(os.path.join(os.path.dirname(__file__), "lib/grpc"))
 import gpt_server_pb2
 import gpt_server_pb2_grpc
-import voicevox_server_pb2
-import voicevox_server_pb2_grpc
+import voice_server_pb2
+import voice_server_pb2_grpc
 
 messages = []
 chat_stream_akari_grpc = ChatStreamAkariGrpc()
-voicevox_channel = grpc.insecure_channel("localhost:10002")
-voicevox_stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
+voice_channel = grpc.insecure_channel("localhost:10002")
+voice_stub = voice_server_pb2_grpc.VoiceServerServiceStub(voice_channel)
 
 GREETING_DISTANCE = 2500  # この距離以内に人が来たら声がけする。
 
 
 class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     """
-    chatGPTにtextを送信し、返答をvoicevox_serverに送るgprcサーバ
+    chatGPTにtextを送信し、返答をvoice_serverに送るgprcサーバ
     """
 
     def __init__(self):
@@ -52,13 +52,9 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
         tmp_messages.append(chat_stream_akari_grpc.create_message(content))
         if request.is_finish:
             messages = copy.deepcopy(tmp_messages)
-            for sentence in chat_stream_akari_grpc.chat(
-                tmp_messages, model="gpt-4o"
-            ):
-                print(f"Send voicevox: {sentence}")
-                voicevox_stub.SetVoicevox(
-                    voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
-                )
+            for sentence in chat_stream_akari_grpc.chat(tmp_messages, model="gpt-4o"):
+                print(f"Send voice: {sentence}")
+                voice_stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
                 response += sentence
             messages.append(
                 chat_stream_akari_grpc.create_message(response, role="assistant")
@@ -67,10 +63,8 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
             for sentence in chat_stream_akari_grpc.chat_and_motion(
                 tmp_messages, short_response=True, model="gpt-4o"
             ):
-                print(f"Send voicevox: {sentence}")
-                voicevox_stub.SetVoicevox(
-                    voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
-                )
+                print(f"Send voice: {sentence}")
+                voice_stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
                 response += sentence
         return gpt_server_pb2.SetGptReply(success=True)
 
@@ -98,16 +92,14 @@ def send_greeting_vision_message(frame: np.ndarray, model: str = "gpt-4o") -> No
     messages.append(chat_stream_akari_grpc.create_message(text))
     response = ""
     for sentence in chat_stream_akari_grpc.chat(tmp_messages, model=model):
-        print(f"Send voicevox: {sentence}")
+        print(f"Send voice: {sentence}")
         try:
-            voicevox_stub.SetVoicePlayFlg(
-                voicevox_server_pb2.SetVoicePlayFlgRequest(flg=True)
+            voice_stub.SetVoicePlayFlg(
+                voice_server_pb2.SetVoicePlayFlgRequest(flg=True)
             )
-            voicevox_stub.SetVoicevox(
-                voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
-            )
+            voice_stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
         except BaseException:
-            print("voicevox server send error")
+            print("voice server send error")
         response += sentence
     messages.append(chat_stream_akari_grpc.create_message(response, role="assistant"))
 

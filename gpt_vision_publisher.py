@@ -17,8 +17,8 @@ import gpt_server_pb2
 import gpt_server_pb2_grpc
 import motion_server_pb2
 import motion_server_pb2_grpc
-import voicevox_server_pb2
-import voicevox_server_pb2_grpc
+import voice_server_pb2
+import voice_server_pb2_grpc
 
 # OAK-D LITEの視野角
 fov = 56.7
@@ -26,12 +26,12 @@ fov = 56.7
 
 class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
     """
-    chatGPTにtextを送信し、返答をvoicevox_serverに送るgprcサーバ
+    chatGPTにtextを送信し、返答をvoice_serverに送るgprcサーバ
     """
 
     def __init__(self, vision_model="gpt-4o"):
-        voicevox_channel = grpc.insecure_channel("localhost:10002")
-        self.stub = voicevox_server_pb2_grpc.VoicevoxServerServiceStub(voicevox_channel)
+        voice_channel = grpc.insecure_channel("localhost:10002")
+        self.stub = voice_server_pb2_grpc.VoiceServerServiceStub(voice_channel)
         self.chat_stream_akari_grpc = ChatStreamAkariGrpc()
         content = "チャットボットとしてロールプレイします。あかりという名前のカメラロボットとして振る舞ってください。"
         self.messages = [
@@ -63,20 +63,16 @@ class GptServer(gpt_server_pb2_grpc.GptServerServiceServicer):
             for sentence in self.chat_stream_akari_grpc.chat(
                 tmp_messages, model=self.vision_model
             ):
-                print(f"Send voicevox: {sentence}")
-                self.stub.SetVoicevox(
-                    voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
-                )
+                print(f"Send voice: {sentence}")
+                self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
                 response += sentence
         else:
             tmp_messages.append(self.chat_stream_akari_grpc.create_message(content))
             for sentence in self.chat_stream_akari_grpc.chat_and_motion(
                 tmp_messages, short_response=True
             ):
-                print(f"Send voicevox: {sentence}")
-                self.stub.SetVoicevox(
-                    voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
-                )
+                print(f"Send voice: {sentence}")
+                self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
                 response += sentence
         return gpt_server_pb2.SetGptReply(success=True)
 
@@ -164,14 +160,14 @@ class SelectiveGptServer(GptServer):
                                                 self.sent_motion = (
                                                     self.chat_stream_akari_grpc.send_reserved_motion()
                                                 )
-                                            print(f"Send voicevox: {sentence}")
-                                            self.stub.SetVoicevox(
-                                                voicevox_server_pb2.SetVoicevoxRequest(
+                                            print(f"Send voice: {sentence}")
+                                            self.stub.SetText(
+                                                voice_server_pb2.SetTextRequest(
                                                     text=sentence
                                                 )
                                             )
         if use_vision:
-            self.stub.SetVoicevox(voicevox_server_pb2.SetVoicevoxRequest(text="えーと"))
+            self.stub.SetText(voice_server_pb2.SetTextRequest(text="えーと"))
             try:
                 self.chat_stream_akari_grpc.motion_stub.SetMotion(
                     motion_server_pb2.SetMotionRequest(
@@ -202,10 +198,8 @@ class SelectiveGptServer(GptServer):
                     self.sent_motion = (
                         self.chat_stream_akari_grpc.send_reserved_motion()
                     )
-                print(f"Send voicevox: {sentence}")
-                self.stub.SetVoicevox(
-                    voicevox_server_pb2.SetVoicevoxRequest(text=sentence)
-                )
+                print(f"Send voice: {sentence}")
+                self.stub.SetText(voice_server_pb2.SetTextRequest(text=sentence))
                 response += sentence
         return response
 

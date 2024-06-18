@@ -29,7 +29,7 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
 
 1. [akari_chatgpt_botのREADME](https://github.com/AkariGroup/akari_chatgpt_bot/blob/main/README.md)内 **遅延なし音声対話botの実行** の起動方法1.~3.を実行する。  
 
-2. gpt_vision_publisherを起動する。(ChatGPTへ画像と文章のリクエストを送信し、受信結果をvoicevox_serverへ渡す。)  
+2. gpt_vision_publisherを起動する。(ChatGPTへ画像と文章のリクエストを送信し、受信結果をvoice_serverへ渡す。)  
    `python3 gpt_vision_publisher.py`  
 
 
@@ -50,8 +50,8 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
    - `--robot_port`: akari_motion_serverのポート。デフォルトは"50055"
    - `--gpt_ip`: gpt_serverのIPアドレス。デフォルトは"127.0.0.1"
    - `--gpt_port`: gpt_serverのポート。デフォルトは"10001"
-   - `--voicevox_ip`: voicevox_serverのIPアドレス。デフォルトは"127.0.0.1"
-   - `--voicevox_port`: voicevox_serverのポート。デフォルトは"10002"
+   - `--voice_ip`: voice_serverのIPアドレス。デフォルトは"127.0.0.1"
+   - `--voice_port`: voice_serverのポート。デフォルトは"10002"
    - `-t`,`--timeout`: マイク入力がこの時間しきい値以下になったら音声入力を打ち切る。デフォルトは0.5[s]。短いと応答が早くなるが不安定になりやすい。  
    - `-p`,`--power_threshold`: マイク入力の音量しきい値。デフォルトは0で、0の場合アプリ起動時に周辺環境の音量を取得し、そこから音量しきい値を自動決定する。  
    - `--progress_report_len`: 音声認識の文字数がここで入力した数値以上になると、一旦gpt_publisherに認識結果を送り、第一声とモーションを生成する(遅延なし応答用)。0にすると無効。デフォルトは8。
@@ -90,7 +90,7 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
 
 1. [akari_chatgpt_botのREADME](https://github.com/AkariGroup/akari_chatgpt_bot/blob/main/README.md)内 **遅延なし音声対話botの実行** の起動方法1.~3.を実行する。  
 
-2. gpt_yolo_publisherを起動する。(ChatGPTへ画像と文章のリクエストを送信し、受信結果をvoicevox_serverへ渡す。)  
+2. gpt_yolo_publisherを起動する。(ChatGPTへ画像と文章のリクエストを送信し、受信結果をvoice_serverへ渡す。)  
    `python3 gpt_yolo_publisher.py`  
 
 
@@ -111,8 +111,8 @@ AKARIの音声対話botに画像認識機能を追加するアプリ
    - `--robot_port`: akari_motion_serverのポート。デフォルトは"50055"
    - `--gpt_ip`: gpt_serverのIPアドレス。デフォルトは"127.0.0.1"
    - `--gpt_port`: gpt_serverのポート。デフォルトは"10001"
-   - `--voicevox_ip`: voicevox_serverのIPアドレス。デフォルトは"127.0.0.1"
-   - `--voicevox_port`: voicevox_serverのポート。デフォルトは"10002"
+   - `--voice_ip`: voice_serverのIPアドレス。デフォルトは"127.0.0.1"
+   - `--voice_port`: voice_serverのポート。デフォルトは"10002"
    - `-t`,`--timeout`: マイク入力がこの時間しきい値以下になったら音声入力を打ち切る。デフォルトは0.5[s]。短いと応答が早くなるが不安定になりやすい。  
    - `-p`,`--power_threshold`: マイク入力の音量しきい値。デフォルトは0で、0の場合アプリ起動時に周辺環境の音量を取得し、そこから音量しきい値を自動決定する。  
    - `--progress_report_len`: 音声認識の文字数がここで入力した数値以上になると、一旦gpt_publisherに認識結果を送り、第一声とモーションを生成する(遅延なし応答用)。0にすると無効。デフォルトは8。
@@ -150,7 +150,7 @@ YOLOの3次元物体トラッキングを用いて、人を検知したらGPT-4V
 
 1. [akari_chatgpt_botのREADME](https://github.com/AkariGroup/akari_chatgpt_bot/blob/main/README.md)内 **遅延なし音声対話botの実行** の起動方法1.~3.を実行する。  
 
-2. gpt_greeting_publisherを起動する。(ChatGPTへ画像と文章のリクエストを送信し、受信結果をvoicevox_serverへ渡す。)  
+2. gpt_greeting_publisherを起動する。(ChatGPTへ画像と文章のリクエストを送信し、受信結果をvoice_serverへ渡す。)  
    `python3 gpt_greeting_publisher.py`  
 
 
@@ -172,8 +172,8 @@ YOLOの3次元物体トラッキングを用いて、人を検知したらGPT-4V
    - `--robot_port`: akari_motion_serverのポート。デフォルトは"50055"  
    - `--gpt_ip`: gpt_serverのIPアドレス。デフォルトは"127.0.0.1"  
    - `--gpt_port`: gpt_serverのポート。デフォルトは"10001"  
-   - `--voicevox_ip`: voicevox_serverのIPアドレス。デフォルトは"127.0.0.1"  
-   - `--voicevox_port`: voicevox_serverのポート。デフォルトは"10002"  
+   - `--voice_ip`: voice_serverのIPアドレス。デフォルトは"127.0.0.1"  
+   - `--voice_port`: voice_serverのポート。デフォルトは"10002"  
    - `-t`,`--timeout`: マイク入力がこの時間しきい値以下になったら音声入力を打ち切る。デフォルトは0.5[s]。短いと応答が早くなるが不安定になりやすい。  
    - `-p`,`--power_threshold`: マイク入力の音量しきい値。デフォルトは0で、0の場合アプリ起動時に周辺環境の音量を取得し、そこから音量しきい値を自動決定する。  
    - `--progress_report_len`: 音声認識の文字数がここで入力した数値以上になると、一旦gpt_publisherに認識結果を送り、第一声とモーションを生成する(遅延なし応答用)。0にすると無効。デフォルトは8。

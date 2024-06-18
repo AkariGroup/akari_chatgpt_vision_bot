@@ -23,7 +23,7 @@ fi
 cd ../
  . venv/bin/activate
 
- gnome-terminal --title="voicevox_server" -- bash -ic "python3 akari_chatgpt_bot/voicevox_server.py --voicevox_local --voicevox_host ${ip}"
+ gnome-terminal --title="voicevox_server" -- bash -ic "python3 akari_chatgpt_bot/voicevox_server.py --voicevox_local --voice_host ${ip}"
  gnome-terminal --title="gpt_vision_publisher" -- bash -ic "python3 gpt_vision_publisher.py --selective"
  gnome-terminal --title="speech_publisher" -- bash -ic "python3 akari_chatgpt_bot/speech_publisher.py --timeout 0.8 --no_motion"
 )
